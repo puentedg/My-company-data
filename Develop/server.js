@@ -1,25 +1,30 @@
 const inquirer = require('inquirer');
 const mysql = require("mysql2");
+require('console.table');
+require("dotenv").config();
 
-const db = mysql.connection(
+const db = mysql.createConnection(
     
-        process.env.DB_NAME,
-        process.env.DB_USER,
-        process.env.DB_PASSWORD,
-       
-        {
-            host: 'localhost',
-            dialect: 'mysql',
-            port: 3306,
-          }
+    {
+        host: 'localhost',
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME
+    }
 );
     
-
+db.connect(function(err){
+    if(err){
+        console.error("connection error" + err.stack);
+        return
+    }
+    console.log("connected");
+})
 const companyMenu = [
     inquirer.prompt ([
     {
         type: 'list',
-        name: 'choices',
+        name: 'dp_choices',
         message: 'Please, choose an option',
         choices: ["View all Departments",
             "View all Roles",
@@ -38,22 +43,22 @@ async function init(){
     while(companyLoop) {
         try {
             const answers = await companyMenu;
-            switch (answers["menu"]) {
+            switch (answers["dp_choices"]) {
                 case "View all Departments": {
                     db.query("SELECT id, name as 'Department Name' FROM department", (err, results) => {
-                        console.table("Departments", results); 
+                        console.table("\nDepartments", results); 
                     });
                     break;
                 }
                 case "View all Roles": {
                     db.query("SELECT role.id AS id, role.title as Title, role.salary as Salary, department.name as Department FROM role JOIN department on role.department_id = department.id", (err, results) => {
-                        console.table("Roles", results); 
+                        console.table("\nRoles", results); 
                     });
                     break;
                 }
                 case "View all Employees": {
-                    db.query("SELECT employee.id as id, employee.first_name as 'First Name', employee.last_name as 'Last Name', title as 'Title', salary as Salary, name as Department, CONCAT(e.first_name, ' ', e.last_name) as Manager FROM employee JOIN role r on employee.role_id = r.id JOIN department d on d.id = r.department_id LEFT JOIN employee e on employee.manager_id = e.id", (err, results) => {
-                        console.table("Employees", results);
+                    db.query("SELECT employee.id as id, employee.first_name as 'First Name', employee.last_name as 'Last Name', title as 'Title', salary as Salary, name as Department, CONCAT(first_name, ' ', last_name) as Manager FROM employee JOIN role on employee.role_id = id JOIN department on id = department_id LEFT JOIN employee on employee.manager_id = employee.id", (err, results) => {
+                        console.table("\nEmployees", results);
                     });
                     break;
                 }
@@ -80,6 +85,17 @@ async function init(){
     process.exit(0);
 });
 
+const allDep = async () => {
+    const sql = `SELECT * FROM department;`;
+    const query = await db.promise().query(sql);
+    
+    let result = query[0].map(({name, id}) => ({
+        name: `${name}`,
+        value: id
+    }));
+    return result;
+}
+
 const AddDepartment = () => {
     inquirer.prompt ([
     {
@@ -98,6 +114,7 @@ const AddDepartment = () => {
 }
 
 
+
 const AddRole = () => {
     inquirer.prompt ([
     {
@@ -114,7 +131,7 @@ const AddRole = () => {
         type: "list",
         name: "departmentId",
         message: "Please, department's id:",
-        choices:[]
+        choices: async function list() {return allDep();}
     }
 ])
 .then((answers) => {
@@ -126,6 +143,16 @@ const AddRole = () => {
 });
 }
 
+const allRole = async () => {
+    const sql = `SELECT * FROM role;`;
+    const query = await db.promise().query(sql);
+    
+    let result = query[0].map(({title,id}) => ({
+        name: `${title}`,
+        value: id
+    }));
+    return result;
+}
 
 const AddEmployee = () => {
     inquirer.prompt ([
@@ -143,13 +170,13 @@ const AddEmployee = () => {
         type: "list",
         name: "role",
         message: "Choose employee's role:",
-        choices: []
+        choices: async function list() {return listRole();}
     },
     {
         type: "list",
         name: "manager",
         message: "Please, type your the Manager's name:",
-        choices: []
+        choices: async function list() {return manager();}
     },
 ])    
 .then((answers) => {
@@ -161,19 +188,33 @@ const AddEmployee = () => {
 });
 }
 
+const allEmployee = async () => {
+    const sql = `SELECT employee.id, CONCAT(employee.first_name, " ", employee.last_name) AS employees FROM employee;`;
+    const query = await db.promise().query(sql);
+
+    let result = query[0].map(({id,employees}) => ({
+        name: `${employees}`,
+        value: id
+    }));
+   
+    return result;
+    
+}
+
+
 const updateEmployee = () => {
     inquirer.prompt ([
     {
         type: "list",
         name: "id",
         message: "Choose employee you wish to update:",
-        choices: []
+        choices: async function list() {return listEmployee();}
     },
     {
         type: "list",
         name: "role_id",
         message: "Choose employee's role:",
-        choices: []
+        choices: async function list() {return listRole();}
     }
 ]) 
     .then((answers) => {
@@ -184,4 +225,3 @@ const updateEmployee = () => {
         });
     });
     }
-  
